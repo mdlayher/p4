@@ -76,6 +76,11 @@ func (p *Preprocessor) Process() ([]byte, error) {
 			// TODO(mdlayher): don't mangle spaces in define value
 			value := string(bytes.Join(f[2:], []byte(" ")))
 
+			// Apply any nested definitions before defining the new value
+			for k, v := range p.defines {
+				value = strings.Replace(value, k, v, -1)
+			}
+
 			define := p.Define
 			if define == nil {
 				define = defineNoChanges

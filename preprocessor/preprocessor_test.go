@@ -120,6 +120,25 @@ header_type foo_t {
 }
 `,
 		},
+		{
+			name: "define uses another defined value",
+			in: `
+#define FOO_BITS 8
+#define BAR_BITS FOO_BITS
+header_type foo_t {
+	fields {
+		foo : BAR_BITS;
+	}
+}
+`,
+			out: `
+header_type foo_t {
+	fields {
+		foo : 8;
+	}
+}
+`,
+		},
 	}
 
 	for _, tt := range tests {
