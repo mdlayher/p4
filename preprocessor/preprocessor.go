@@ -14,9 +14,6 @@ import (
 // A Preprocessor processes directives in source code to perform certain
 // actions before any other processing stages occur.
 type Preprocessor struct {
-	s       *bufio.Scanner
-	defines map[string]string
-
 	// Define is a function which indicates how "#define" directives should
 	// be handled.
 	//
@@ -41,6 +38,9 @@ type Preprocessor struct {
 	// If nil, name attempts to open a file in the filesystem, returning its
 	// contents for inclusion in the output source code.
 	Include func(name string) (src []byte, err error)
+
+	s       *bufio.Scanner
+	defines map[string]string
 }
 
 // New creates a new Preprocessor using the input io.Reader.
@@ -48,12 +48,6 @@ func New(r io.Reader) *Preprocessor {
 	return &Preprocessor{
 		s:       bufio.NewScanner(r),
 		defines: make(map[string]string, 0),
-
-		Define: func(name string, value string) (string, string, error) {
-			return name, value, nil
-		},
-
-		Include: ioutil.ReadFile,
 	}
 }
 
@@ -82,7 +76,12 @@ func (p *Preprocessor) Process() ([]byte, error) {
 			// TODO(mdlayher): don't mangle spaces in define value
 			value := string(bytes.Join(f[2:], []byte(" ")))
 
-			outName, outValue, err := p.Define(name, value)
+			define := p.Define
+			if define == nil {
+				define = defineNoChanges
+			}
+
+			outName, outValue, err := define(name, value)
 			if err != nil {
 				return nil, fmt.Errorf("preprocessor error while defining %q as %q: %v", outName, outValue, err)
 			}
@@ -97,8 +96,13 @@ func (p *Preprocessor) Process() ([]byte, error) {
 				return nil, fmt.Errorf("invalid include preprocessor directive: %q", string(b))
 			}
 
+			include := p.Include
+			if include == nil {
+				include = ioutil.ReadFile
+			}
+
 			name := strings.Trim(string(f[1]), `"`)
-			inc, err := p.Include(name)
+			inc, err := include(name)
 			if err != nil {
 				return nil, fmt.Errorf("preprocessor error while including %q: %v", name, err)
 			}
@@ -119,4 +123,9 @@ func (p *Preprocessor) Process() ([]byte, error) {
 	}
 
 	return src, nil
+}
+
+// defineNoChanges is the default Preprocessor.Define function.
+func defineNoChanges(name string, value string) (string, string, error) {
+	return name, value, nil
 }
