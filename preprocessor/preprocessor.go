@@ -8,7 +8,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"strings"
+)
+
+const (
+	// maxFileSize specifies the maximum allowed file size for an included file.
+	maxFileSize = 1 << 20 // 1 MiB
 )
 
 // A Preprocessor processes directives in source code to perform certain
@@ -41,6 +47,12 @@ type Preprocessor struct {
 
 	s       *bufio.Scanner
 	defines map[string]string
+	fs      filesystem
+}
+
+// A filesystem is an interface which mimics filesystem operations.
+type filesystem interface {
+	Open(name string) (io.ReadCloser, error)
 }
 
 // New creates a new Preprocessor using the input io.Reader.
@@ -48,6 +60,7 @@ func New(r io.Reader) *Preprocessor {
 	return &Preprocessor{
 		s:       bufio.NewScanner(r),
 		defines: make(map[string]string, 0),
+		fs:      &osFilesystem{},
 	}
 }
 
@@ -103,7 +116,7 @@ func (p *Preprocessor) Process() ([]byte, error) {
 
 			include := p.Include
 			if include == nil {
-				include = ioutil.ReadFile
+				include = limitReadFile(p.fs)
 			}
 
 			name := strings.Trim(string(f[1]), `"`)
@@ -138,4 +151,28 @@ func (p *Preprocessor) Process() ([]byte, error) {
 // defineNoChanges is the default Preprocessor.Define function.
 func defineNoChanges(name string, value string) (string, string, error) {
 	return name, value, nil
+}
+
+// limitReadFile returns the default Preprocessor.Include function.
+// It reads the contents of a file, with a maximum size of maxFileSize.
+// If the file is larger than maxFileSize, the file will not be read
+// beyond maxFileSize bytes.
+func limitReadFile(fs filesystem) func(name string) ([]byte, error) {
+	return func(name string) ([]byte, error) {
+		f, err := fs.Open(name)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+
+		return ioutil.ReadAll(io.LimitReader(f, maxFileSize))
+	}
+}
+
+// An osFilesystem is a filesystem that uses package os functions.
+type osFilesystem struct{}
+
+// Open implements filesystem.
+func (fs *osFilesystem) Open(name string) (io.ReadCloser, error) {
+	return os.Open(name)
 }
