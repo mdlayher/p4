@@ -227,6 +227,44 @@ header_type foo_t {
 }
 `,
 		},
+		{
+			name: "include uses define from main file",
+			in: `
+#define FOO_BITS 8
+#include "bar.p4"
+
+header_type foo_t {
+	fields {
+		foo : FOO_BITS;
+	}
+}
+`,
+			include: map[string]string{
+				"bar.p4": `
+header_type bar_t {
+	fields {
+		foo : FOO_BITS;
+		bar : 16;
+	}
+}
+`,
+			},
+			out: `
+
+header_type bar_t {
+	fields {
+		foo : 8;
+		bar : 16;
+	}
+}
+
+header_type foo_t {
+	fields {
+		foo : 8;
+	}
+}
+`,
+		},
 	}
 
 	for _, tt := range tests {

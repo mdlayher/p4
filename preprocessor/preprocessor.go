@@ -112,6 +112,11 @@ func (p *Preprocessor) Process() ([]byte, error) {
 				return nil, fmt.Errorf("preprocessor error while including %q: %v", name, err)
 			}
 
+			// Apply definitions on included source
+			for k, v := range p.defines {
+				inc = bytes.Replace(inc, []byte(k), []byte(v), -1)
+			}
+
 			src = append(src, inc...)
 		default:
 			for k, v := range p.defines {
